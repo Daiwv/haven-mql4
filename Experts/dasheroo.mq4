@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                     RsiAlert.mq4 |
+//|                                                     dasheroo.mq4 |
 //|                        Copyright 2016, MetaQuotes Software Corp. |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
@@ -7,17 +7,13 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 #property strict
-
-double last_alert_H1 = NULL;
-double last_alert_H4 = NULL;
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
   {
 //--- create timer
-   OnTimer();
-   EventSetTimer(300);
+   EventSetTimer(60);
       
 //---
    return(INIT_SUCCEEDED);
@@ -45,37 +41,21 @@ void OnTick()
 void OnTimer()
   {
 //---
-   datetime now = TimeCurrent();
-   double H1 = getRSI(now, PERIOD_H1);
-   double H4 = getRSI(now, PERIOD_H4);
-   double Price = Ask;
-   
-   string text = "";
-   if (H1 > 70 || H1 < 30) {
-      
-      if (H1 > 70)
-         Price = Bid;
-         
-      text += "*RSI H1:* "+NormalizeDouble(H1,2)+" (_"+Price+"_)\n";
-   } else {
-      if (last_alert_H1 != NULL) {
-         last_alert_H1 = NULL;
-      }
-   }
-   
-   if (H4 > 70 || H4 < 30) {
-      if (H4 > 70)
-         Price = Bid;
-         
-      text += "*RSI H4:* "+NormalizeDouble(H4,2)+" (_"+Price+"_)\n";
-      last_alert_H4 = H4;
-   }
-   if (StringLen(text) != 0) {
-      string symbol = Symbol();
-      StringToLower(symbol);
-      string channel = "#alerts-"+symbol;
-      Print(channel);
-      sendToSlack(channel,text);
+   double balance = AccountBalance();
+   datetime now = TimeLocal();
+   string nowstr = TimeToString(now, TIME_DATE);
+   StringReplace(nowstr, ".", "-");
+   char data[], result[];
+   string headers;
+   string json = "value="+balance+"&label=Balance&type=currency";
+   //--- Create the body of the POST request for authorization
+   //StringToCharArray(json, data, 0, StringLen(json));
+   int res = WebRequest("PUT", "https://www.dasheroo.com/external/api/subscriptions/b764e17f62b098c4a141ca840fcabc47?"+json, "", NULL,
+                        10000, data, ArraySize(data), result, headers);
+   Print(res);
+   Print(json);
+   if (res != 200) {
+      Print(GetLastError());
    }
   }
 //+------------------------------------------------------------------+
@@ -91,23 +71,3 @@ double OnTester()
    return(ret);
   }
 //+------------------------------------------------------------------+
-double getRSI(int time, int timeframe) {
-   int iShift = iBarShift(NULL,timeframe, time, false);
-   int rsi = iRSI(NULL, timeframe, 14, PRICE_CLOSE, iShift);
-   return MathRound(rsi);
-}
-
-int sendToSlack(string channel, string text) {
-   char data[], result[];
-   string headers;
-   string json = "payload={\"text\":\""+text+"\",\"channel\":\""+channel+"\"}";
-   //--- Create the body of the POST request for authorization
-   StringToCharArray(json, data, 0, StringLen(json));
-   int res = WebRequest("POST", "https://hooks.slack.com/services/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", "", NULL,
-                        10000, data, ArraySize(data), result, headers);
-   if(res==-1)
-     {
-      Print("Error in WebRequest. Error code  =",GetLastError());
-   }
-   return res;
-}
